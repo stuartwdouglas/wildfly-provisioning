@@ -108,21 +108,40 @@ existing feature pack system.
 Easily patch product + community (all capabilities)::
 It must be possible to patch software that is managed by the provisioning tool.
 
+Keep a history of all changes::
+The provisioning tool must keep a full history and allow the server to be rolled back to any previous state.
+
 User created streams::
 A end users should be able to create their own streams and install them on a server instance.
 
-LP can provide independent streams
-LP can override Wildfly
-LP can be uninstalled
-Installation diff
-Current FS
-Detailed installation info
-Zip
-Isolated stream MD files
+Layered products can provide independent streams::
+Layered products can provide their own update stream that can be updated independently of the base version.
+
+Layered products can override Wildfly::
+It should be possible for a layered product to modify and override the base installation.
+
+Layered products can be uninstalled::
+It should be possible to remove a layered product and go back to the base installation.
+
+Installation diff::
+It should be possible to view any modification that have been made to the provisioned server.
+
+Detailed installation info::
+It must be possible to get a detailed report on exactly what features are installed, including the current version of
+all features.
+
+Zip overlay support::
+It must be possible to install a layered product using an overlay zip, that is extracted over an existing installation.
+
+Current FS::
+TODO: I can't remember what this requirement actually means
+
+Isolated stream MD files::
+Stream metadata should be independent.
+
 === Optional Requirements
 
 RPM Support::
-
 It should be possible to easily turn packages into RPM files.
 
 === Non Requirements
@@ -134,9 +153,85 @@ Invalidate Jars::
 Jar invalidation by corrupting old versions of jars is not a requirement.
 
 Migration::
-This is not a migration tool, mygration will be handled by our existing migration tooling.
+This is not a migration tool, migration will be handled by our existing migration tooling.
 
 Runtime patching::
 It is not a requirement for a server to be updated while it is still running.
 
 
+== Example Usage
+
+.Add a universe
+----
+pm universe add org.jboss.universe:universe
+----
+
+(this universe is installed by default, but this command can install other universes. The list of available universes is maintained in a hidden file in the user's home dir)
+
+.Work with the universe
+----
+`pm universe list <optional id>`
+pm search eap
+
+>org.jboss:eap-7.1 dependency core-2.2
+>org.jboss:eap-7.2
+>org.jboss:eap-7.3
+----
+
+.Install some packages
+----
+pm install --update eap-7.1 myeap-7.1 # Grab 7.1.1.GA (latest) core (latest)
+pm install eap-7.1 myeap-7.1 # Grab 7.1.1.GA (latest) core (original)
+
+pm install eap-7.1 --version 7.1.0.GA myeap-7.1 # Grab 7.1.0.GA core (original)
+
+pm install eap-7.1 --update --version 7.1.0.GA myeap-7.1 # Grab 7.1.0.GA core (latet)
+----
+
+.Update an installation
+----
+cd myeap-7.1
+
+pm update --stage # Updates provisioning file, no server modifications on all streams
+pm apply # Perhaps server modifications specified in file
+pm unstage # restore the provisioning file to the last log entry
+
+pm update core [--stage]# only update core feature-pack
+pm update eap-7.1 [--stage]#  update core and eap (dependency)
+pm update --exclusive eap-7.1 # update eap only
+
+pm log # displays update log
+pm restore <change-id> # changes provisioning file to that in change id, without resetting history
+pm reset <change-id> # changes provisioning file to that change in id, and deletes all history after id
+
+pm update core --version 1.1.0.Final
+----
+
+
+.Modify the installed groups and packages
+----
+pm group list # display all groups
+pm group add extra-stuff # adds extra-stuff to provisioning file, and installs files
+pm group remove extra-stuff
+
+pm package list
+pm package remove --dependents low-level-package
+pm package add extra-package # depends on low-level-package
+pm package add low-level-package
+----
+
+.Add a new feature pack to an existing installation
+----
+pm install weld-experimental
+pm uninstall weld-experimental
+----
+
+----
+# Remove all packages installed in the eap-7.1 feature pack, and install original packages that were overridden,
+pm uninstall eap-7.1
+
+pm report
+
+pm create-docker-image /images/F21.img
+pm depoy-openshift
+----
