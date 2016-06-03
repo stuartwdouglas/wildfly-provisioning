@@ -6,54 +6,10 @@
 :toc:   left
 
 
-== Overview
+== Introduction
 
-This document covers the design of the Wildfly Provisioning System. This system has the following goals:
-
-== Terminology
-Installation::
-An instance of provisioned software on the file system.
-
-Feature Pack::
-A collection of packages, metadata. Automatic installation of packages when added, using specified default groups. Dependencies can be placed on other feature packs, and package overrides are allowed. Package names are namespaced to the feature pack, unless a namespace is explicitly specified. Packs are versioned and identified by a maven GAV. Possibly needs a new name.
-
-History::
-A record of previous server states, which can be used to revert the server to a previous state (atomically).
-
-One-off Feature Pack::
-A feature pack which is applicable to an explicit version of a base feature pack. Once the base feature pack is updated to a newer version the one-off feature pack is archived in the history and its specification is no longer effective in the current installation.
-
-Fat Feature Pack::
-A feature pack which includes all artifacts necessary to provision the server. (Might instead just require a local maven repo, that we provide as a zip)
-
-Default Group(s)::
-A list of groups that should be provisioned when the feature pack is added to the installation, unless the provisioning file has explicitly specified the groups to provision. In other words, the defaults are ignored when a provisioning file specifies a set of groups to provision.
-
-Universe Artifact::
-An artifact with a list of known feature packs, with additional metadata necessary for discovery. Also located by a maven GAV.
-
-Server State::
-Represents the current provisioned state of the installation.
-
-Provisioning File::
-A configuration specifying the desired state of installation. Lists the feature-packs to be installed, and other configuration such as exclusions, group selection, custom overides, and extra tasks. Can be used as a repeatable provisioning description (can be ran on other systems to produce the same exact installation)
-
-Package::
-a named set of files, metadata, scripted actions (CLI commands), dependencies on other packages. Elements potentially remotely referenceable.
- * Files must not conflict with files from other installed packages.
- * Dynamic base locations for each file
- * Minimal atomic unit
- * Mappable to an RPM
- * Example Mapping
-  - Every extension a package (e.g ee, ejb, undertow, weld javamail, hibernate-search)
-  - Close to 1:1 module - package (who owns module.xml)
-
-Group::
-A logical name which maps to a set of packages or groups (modeled itself as a special package)
-     * ee-full (undertow-subsystem, jberet, …)
-     * clustering (infinispan, jgroups, mod_cluster)
-     * ee-full-ha (ee-full, clustering)
-     * legacy (sar, mc, ..)
+This document covers the design of the Wildfly Provisioning System. This provisioning system will allow Wildfly servers to be
+provisioned modified and updated, including installing additional functionality (e.g. adding Keycloak) and patching.
 
 == Requirements
 
@@ -158,6 +114,93 @@ This is not a migration tool, migration will be handled by our existing migratio
 Runtime patching::
 It is not a requirement for a server to be updated while it is still running.
 
+== Design Overview
+
+The solution described here is based around the concept of 'repeatable provisioning'. In essence for every piece of provisioned
+software there will existing a `provisioned-state.xml` file that describes the current state of the server as provisioned.
+Given nothing but this state file the provisioning tool can provision a new server with the same configuration.
+
+There are four main components to this system:
+
+The provisioned state file `provisioned-state.xml`::
+This represents the current state of the provisioned software.
+
+The provisioning file `provisioning.xml`::
+This represents the new desired state of the provisioned software.
+
+The provisioning tool::
+This tool is responsible for provisioning and modifying servers based on the contents of the provisioning file. It can
+also be used as a CLI interface to make changes to the provisioning file, query server state and perform all provisioning
+related operations.
+
+Feature packs::
+These work in a similar matter to our existing feature packs, however the format will be different as described below.
+
+.A note on server state
+[NOTE]
+Note that the `provisioning-state.xml` file only knows about server state that was applied through the provisioning tool.
+If manual changes are made to the config they will not be reflected in the server state.
+
+== Terminology
+Installation::
+An instance of provisioned software on the file system.
+
+Feature Pack::
+A collection of packages, metadata. Automatic installation of packages when added, using specified default groups. Dependencies can be placed on other feature packs, and package overrides are allowed. Package names are namespaced to the feature pack, unless a namespace is explicitly specified. Packs are versioned and identified by a maven GAV. Possibly needs a new name.
+
+History::
+A record of previous server states, which can be used to revert the server to a previous state (atomically).
+
+One-off Feature Pack::
+A feature pack which is applicable to an explicit version of a base feature pack. Once the base feature pack is updated to a newer version the one-off feature pack is archived in the history and its specification is no longer effective in the current installation.
+
+Fat Feature Pack::
+A feature pack which includes all artifacts necessary to provision the server. (Might instead just require a local maven repo, that we provide as a zip)
+
+Default Group(s)::
+A list of groups that should be provisioned when the feature pack is added to the installation, unless the provisioning file has explicitly specified the groups to provision. In other words, the defaults are ignored when a provisioning file specifies a set of groups to provision.
+
+Universe Artifact::
+An artifact with a list of known feature packs, with additional metadata necessary for discovery. Also located by a maven GAV.
+
+Server State::
+Represents the current provisioned state of the installation.
+
+Provisioning File::
+A configuration specifying the desired state of installation. Lists the feature-packs to be installed, and other configuration such as exclusions, group selection, custom overides, and extra tasks. Can be used as a repeatable provisioning description (can be ran on other systems to produce the same exact installation)
+
+Package::
+a named set of files, metadata, scripted actions (CLI commands), dependencies on other packages. Elements potentially remotely referenceable.
+ * Files must not conflict with files from other installed packages.
+ * Dynamic base locations for each file
+ * Minimal atomic unit
+ * Mappable to an RPM
+ * Example Mapping
+  - Every extension a package (e.g ee, ejb, undertow, weld javamail, hibernate-search)
+  - Close to 1:1 module - package (who owns module.xml)
+
+Group::
+A logical name which maps to a set of packages or groups (modeled itself as a special package)
+     * ee-full (undertow-subsystem, jberet, …)
+     * clustering (infinispan, jgroups, mod_cluster)
+     * ee-full-ha (ee-full, clustering)
+     * legacy (sar, mc, ..)
+
+
+== Software Universe
+
+A universe is list of software that can be provisioned. For example the JBoss community universe would contain all
+software that can be installed through the provisioning tool. The idea of the universe is to allow users to easily
+discover what software is available. It is not core functionality of the provisioning tool, but rather allows
+convenience feature such as `search` and tab completion to work.
+
+At its core a universe is identified by a maven group and artifact combination (e.g. `org.jboss.universe:jboss-universe`).
+The tool will use the maven metadata publishing in the maven repository to make sure it always obtains the latest version
+of the universe artifact.
+
+This artifact is simple a jar file that contains some XML metadata about the available software, including the name,
+description and the maven group and artifact id under which it is published (but not version information, the tool
+will always connect to the repository directly in order to ascertain which is the latest version).
 
 == Example Usage
 
