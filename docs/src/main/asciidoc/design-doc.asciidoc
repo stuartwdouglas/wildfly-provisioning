@@ -139,9 +139,32 @@ These work in a similar matter to our existing feature packs, however the format
 .A note on server state
 [NOTE]
 Note that the `provisioning-state.xml` file only knows about server state that was applied through the provisioning tool.
-If manual changes are made to the config they will not be reflected in the server state.
+If manual changes are made to the config they will not be reflected in the server state. It will be possible to provide
+configuration and deployment information in the provision file so it will be possible to provision a fully configured
+server.
 
-== Terminology
+=== Use cases
+
+There are four main use cases that have been identified for this tool:
+
+Management of a traditional server installation::
+In this use case the provisioning tool eventually takes over the role of the current patching tool. It allows administrators
+to keep their server installation up to date, as well as install additional features.
+
+Provisioning of containers / cloud nodes / microservices::
+In this use case all (or almost all) server config is provided in the provisioning file (including deployments), which
+is then used to provision a new server whenever a new node, VM or container is spun up. Persistent updates to
+configuration are done by modifying the provisioning file, and then spinning up new nodes with the new configuration.
+
+Provisioning a configured server for testing::
+This will allow developers to easily test their project via arquillian by allowing their build process to easily provision
+a fully configured server to run the tests against.
+
+Build Wildfly and downstream features::
+The provisioning tooling must be able to generate a provisioned server as part of the Wildfly build proccess, and must
+also be usable by downstream products to do the same.
+
+=== Terminology
 Installation::
 An instance of provisioned software on the file system.
 
@@ -186,8 +209,102 @@ A logical name which maps to a set of packages or groups (modeled itself as a sp
      * ee-full-ha (ee-full, clustering)
      * legacy (sar, mc, ..)
 
+== Feature packs
 
-== Software Universe
+The feature packs described by this document work in a similar manner to our existing feature packs, however they are not
+backwards compatible. The feature packs consumed by the provisioning tool contain more metadata than is currently provided,
+and will be less Wildfly specific. In general any features that are needed exclusively for Wildfly or related downstream
+projects will be implemented as plug ins.
+
+Feature packs contain the following information:
+
+A maven GAV identifier::
+This provides the feature packs unique identifier.
+
+A set of dependencies::
+Feature packs can depend on other feature packs.
+
+A set of packages::
+See the description below for a complete definition of what comprises a package.
+
+A set of default packages::
+The default packages are the packages that will be installed by default if the user does not explicitly configure the
+installed packages. This allows feature packs to provide optional features that are not installed by default.
+
+
+Most of the content in a feature pack is contained in packages. Packages contain the following information:
+
+A package identifier::
+The identifier is of the following format feature-pack-group-id:feature-pack-id:package-name.
+In most circumstances the feature pack name and group are inferred from the containing feature pack. It is possible
+to explicitly define this however, which allows a package to override a package in a dependent feature pack. For example
+the `org.wildfly.core:wildfly-core` feature pack may provide a package called `io.undertow.core`, which would be translated
+to `org.wildfly.core:wildfly-core:io.undertow.core`.
+
+A possibly empty set of files::
+This makes up the actual content that gets deployed to disk by the provisioning tool.
+
+A possibly empty set of installation tasks::
+These are tasks that are run after the installation. These tasks are designed to be pluggable. In particular it is
+possible that a feature packs file set contains the tasks that should be run. In order to allow simple mapping to
+RPN these tasks will be standalone executables, rather than code that is loaded into the package managers process.
+
+== Patching and streams
+
+A stream is considered to be all feature with the same group and artifact that meet a particular stream policy. For
+example The EAP 7.1.x Final stream would be all EAP 7.1.x feature packs that have the .Final qualifier. The default
+stream policy will be set in the feature pack, however it will be possible to override it.
+
+When running update with the provisiong tool it will only look for new artifacts that meet the stream policy. This means
+that the provisioning tool will not update between major versions unless it is explicitly told to (this is not a supported
+use case).
+
+== Implementation Details
+
+=== Updating an existing server
+
+Updates are performed by conceptually doing the following process (note that this is a conceptual representation only):
+
+Build the current server state::
+The tool will examine the current server state, and using the feature packs for the current state determine the pristine
+provisioned state.
+
+Builder the new expected server state::
+The tool will examine the desired server state, download (or otherwise aquire) any needed feature packs and other artifacts,
+and build a model of what is to be provisioned.
+
+Save the current server state to the history::
+The history allows provisioning operations to be undone. As well as saving the current server state file it should also
+backup configuration and other relevant files. Any files that can simply be repositioned from a feature pack will not be
+copied to history.
+
+Change the installation to match the expected state::
+In general this will mostly involve simply installing files from the new feature packs, and removing any files that are
+no longer required. This may also involve the execution of post installation tasks, which may modify configuration.
+
+=== Dependent feature pack handling
+
+When feature packs specify a dependency on another feature pack they must specify the full GAV. If the dependent feature
+pack is not explicitly listed in the provisioning file then whatever dependency version was listed in the feature pack
+will be installed. If a provisiong file explicitly lists the dependency version then it will always be used.
+
+It will also be possible to explicitly specify a minimum version of a dependent feature pack. This allows you to force
+the upgrade of a dependency, without tying it to a specific version. In this case the version that will be used is the
+higher of the listed minimum version and the version that is specified in the feature pack.
+
+=== Dependency resolution strategy
+
+TODO: the dependency resolution strategy must be documented, as it forms an important contract for repeatable
+provisioning.
+
+== Repository Implementation
+
+This tool does not require any new repository system or infrastructure, it is based around standard maven repositories.
+The underlying provisioning files always identify artifacts by a full GAV identifier to ensure repeatable builds. The
+provisioning tool will allow the use of just group and artifact for some commands, which allows the provisiong tool to
+automatically look up the most up to date version.
+
+=== Software Universe
 
 A universe is list of software that can be provisioned. For example the JBoss community universe would contain all
 software that can be installed through the provisioning tool. The idea of the universe is to allow users to easily
@@ -202,7 +319,7 @@ This artifact is simple a jar file that contains some XML metadata about the ava
 description and the maven group and artifact id under which it is published (but not version information, the tool
 will always connect to the repository directly in order to ascertain which is the latest version).
 
-== Example Usage
+== Example Tool Usage
 
 .Add a universe
 ----
@@ -278,3 +395,10 @@ pm report
 pm create-docker-image /images/F21.img
 pm depoy-openshift
 ----
+
+
+== RPM
+
+A soft requirement is that it should be possible to build RPM's out of the feature packs, and allow the user to install
+via RPM. RPM support will be somewhat more limited, as it will only be possible to install a single server instance via
+RPM.
