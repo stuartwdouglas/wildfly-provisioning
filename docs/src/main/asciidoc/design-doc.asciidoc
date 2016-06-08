@@ -171,26 +171,11 @@ An instance of provisioned software on the file system.
 Feature Pack::
 A collection of packages, metadata. Automatic installation of packages when added, using specified default groups. Dependencies can be placed on other feature packs, and package overrides are allowed. Package names are namespaced to the feature pack, unless a namespace is explicitly specified. Packs are versioned and identified by a maven GAV. Possibly needs a new name.
 
-History::
-A record of previous server states, which can be used to revert the server to a previous state (atomically).
-
 One-off Feature Pack::
 A feature pack which is applicable to an explicit version of a base feature pack. Once the base feature pack is updated to a newer version the one-off feature pack is archived in the history and its specification is no longer effective in the current installation.
 
 Fat Feature Pack::
 A feature pack which includes all artifacts necessary to provision the server. (Might instead just require a local maven repo, that we provide as a zip)
-
-Default Group(s)::
-A list of groups that should be provisioned when the feature pack is added to the installation, unless the provisioning file has explicitly specified the groups to provision. In other words, the defaults are ignored when a provisioning file specifies a set of groups to provision.
-
-Universe Artifact::
-An artifact with a list of known feature packs, with additional metadata necessary for discovery. Also located by a maven GAV.
-
-Server State::
-Represents the current provisioned state of the installation.
-
-Provisioning File::
-A configuration specifying the desired state of installation. Lists the feature-packs to be installed, and other configuration such as exclusions, group selection, custom overides, and extra tasks. Can be used as a repeatable provisioning description (can be ran on other systems to produce the same exact installation)
 
 Package::
 a named set of files, metadata, scripted actions (CLI commands), dependencies on other packages. Elements potentially remotely referenceable.
@@ -203,11 +188,26 @@ a named set of files, metadata, scripted actions (CLI commands), dependencies on
   - Close to 1:1 module - package (who owns module.xml)
 
 Group::
-A logical name which maps to a set of packages or groups (modeled itself as a special package)
+A logical name which maps to a set of packages or groups. Modeled itself as a special package.
      * ee-full (undertow-subsystem, jberet, …)
      * clustering (infinispan, jgroups, mod_cluster)
      * ee-full-ha (ee-full, clustering)
      * legacy (sar, mc, ..)
+
+Default Group(s)::
+A list of groups that should be provisioned when the feature pack is added to the installation, unless the provisioning file has explicitly specified the groups to provision. In other words, the defaults are ignored when a provisioning file specifies a set of groups to provision.
+
+Provisioning File::
+A configuration specifying the desired state of installation. Lists the feature-packs to be installed, and other configuration such as exclusions, group selection, custom overides, and extra tasks. Can be used as a repeatable provisioning description (can be ran on other systems to produce the same exact installation)
+
+Server State::
+Represents the current provisioned state of the installation.
+
+History::
+A record of previous server states, which can be used to revert the server to a previous state (atomically).
+
+Universe Artifact::
+An artifact with a list of known feature packs, with additional metadata necessary for discovery. Also located by a maven GAV.
 
 == Feature packs
 
