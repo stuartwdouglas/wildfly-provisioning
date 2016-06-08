@@ -292,6 +292,13 @@ It will also be possible to explicitly specify a minimum version of a dependent 
 the upgrade of a dependency, without tying it to a specific version. In this case the version that will be used is the
 higher of the listed minimum version and the version that is specified in the feature pack.
 
+=== Staged Patching
+
+It must be possible to support staged patching. This means the patch is applied to the point where it can be determined
+if it has succeeded or failed, and then it is actually made live on next server restart. It may be possible to use this
+facility to allow distributions to produce overlay zips that are compatible with the provisioning tool. Eventually the
+overlay file would contain a staged patch, and on server start the staged patch would be applied.
+
 === Dependency resolution strategy
 
 TODO: the dependency resolution strategy must be documented, as it forms an important contract for repeatable
